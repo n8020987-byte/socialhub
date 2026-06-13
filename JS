@@ -1,0 +1,721 @@
+// === КОНФИГУРАЦИЯ FIREBASE ===
+const firebaseConfig = {
+  apiKey: "AIzaSyDHHIUCMWtqiXFlXySD5o8BOLuSRm9GtVk",
+  authDomain: "socialhub-online.firebaseapp.com",
+  databaseURL: "https://socialhub-online-default-rtdb.firebaseio.com",
+  projectId: "socialhub-online",
+  storageBucket: "socialhub-online.firebasestorage.app",
+  messagingSenderId: "194839392292",
+  appId: "1:194839392292:web:17142a3b452e63faf6e8b1"
+};
+
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+
+// === КЛЮЧ ДЛЯ GOOGLE GEMINI ===
+const API_token = "AQ.Ab8RN6KhCqbE0lQ-AJdt58uASYVCzUs6wcsXzo1NNA2ntwcbCg"; 
+
+// Список соцсетей
+const SOCIAL = {
+  youtube: { name: "YouTube", icon: "▶", color: "#ff3d3d", url: "https://www.youtube.com", desc: "Смотри видео и подписки в одном месте." },
+  instagram: { name: "Instagram", icon: "📷", color: "#e1306c", url: "https://www.instagram.com", desc: "Лента, stories и сообщения." },
+  tiktok: { name: "TikTok", icon: "♪", color: "#00f2ea", url: "https://www.tiktok.com", desc: "Короткие видео и тренды." },
+  pinterest: { name: "Pinterest", icon: "📌", color: "#e60023", url: "https://www.pinterest.com", desc: "Идеи, картинки и вдохновение." },
+  discord: { name: "Discord", icon: "💬", color: "#5865f2", url: "https://discord.com/app", desc: "Серверы, чаты и голосовые комнаты." }
+};
+
+// БАЗА ДАННЫХ РОЛИКОВ
+const VIDEO_DATABASE = [
+  { title: "Финал Последней Реальности", blogger: "Лололошка", id: "IK3QKzKUlHM", preview: "https://img.youtube.com/vi/IK3QKzKUlHM/0.jpg" },
+  { title: "100 дней зомби", blogger: "Зиман", id: "uH-dEM3PsMU", preview: "https://img.youtube.com/vi/uH-dEM3PsMU/0.jpg" },
+  { title: "Обнова майнкрафта с ачивкой", blogger: "Юни", id: "0a-78m-rN20", preview: "https://img.youtube.com/vi/0a-78m-rN20/0.jpg" }
+];
+
+let currentTab = "youtube";
+let currentGame = "tap";
+let chatMode = "gemini"; 
+let privateTarget = "";  
+let sidebarMode = "online"; 
+let leaderboardGame = "tap"; 
+
+// Игровые очки
+let tapScore = 0;
+let memoryScore = 0; 
+let memoryHighlight = Math.floor(Math.random() * 9);
+let secretNum = Math.floor(Math.random() * 100) + 1;
+let tetrisScore = 0; 
+
+// Переменные Тетриса
+let tetrisInterval = null;
+let isTurboSpeed = false; 
+const T_ROWS = 20, T_COLS = 10;
+let tBoard = Array(T_ROWS).fill().map(() => Array(T_COLS).fill(0));
+let curPiece = null, curX = 0, curY = 0;
+const SHAPES = [
+  [[1,1,1,1]], [[1,1],[1,1]], [[0,1,0],[1,1,1]], [[1,1,0],[0,1,1]], [[0,1,1],[1,1,0]], [[1,0,0],[1,1,1]], [[0,0,1],[1,1,1]]
+];
+
+const content = document.getElementById("content");
+const tabsContainer = document.getElementById("tabs-container");
+
+// Элементы интерфейса
+const regInput = document.getElementById("reg-name");
+const submitBtn = document.getElementById("btn-submit-name");
+const formView = document.getElementById("auth-form-view");
+const welcomeView = document.getElementById("auth-welcome-view");
+const displayName = document.getElementById("user-display-name");
+const friendsList = document.getElementById("friends-list");
+const sidebar = document.getElementById("friends-sidebar");
+const leaderboardList = document.getElementById("leaderboard-list");
+
+// ЛОГИКА КАСТОМНЫХ ТЕМ
+const themes = {
+  agrar: { accent: "#00f2ea", bg: "#0a0a0c" },
+  sunset: { accent: "#ff3d81", bg: "#0f0814" },
+  matrix: { accent: "#00ff41", bg: "#000000" }
+};
+
+function applyTheme(themeKey) {
+  const selectedTheme = themes[themeKey] || themes.agrar;
+  document.documentElement.style.setProperty('--accent', selectedTheme.accent);
+  document.documentElement.style.setProperty('--bg', selectedTheme.bg);
+  localStorage.setItem("userTheme", themeKey);
+  
+  document.querySelectorAll(".theme-picker button").forEach(btn => {
+    btn.classList.toggle("active", btn.id === `theme-${themeKey}`);
+  });
+}
+
+document.getElementById("theme-agrar").onclick = () => applyTheme("agrar");
+document.getElementById("theme-sunset").onclick = () => applyTheme("sunset");
+document.getElementById("theme-matrix").onclick = () => applyTheme("matrix");
+
+const savedTheme = localStorage.getItem("userTheme") || "agrar";
+applyTheme(savedTheme);
+
+// ДИНАМИЧЕСКОЕ ДОБАВЛЕНИЕ КНОПКИ ПРОФИЛЯ В БОКОВУЮ ПАНЕЛЬ (ОБНОВЛЕНИЕ №6)
+const switcherContainer = document.querySelector(".panel-switcher");
+if (switcherContainer && !document.getElementById("btn-panel-profile")) {
+  const profBtn = document.createElement("button");
+  profBtn.id = "btn-panel-profile";
+  profBtn.className = "game-card";
+  profBtn.style.cssText = "padding: 5px 10px; font-size: 12px; flex: 1;";
+  profBtn.textContent = "👤 Профиль";
+  switcherContainer.appendChild(profBtn);
+
+  // Создаем контейнер для отображения профиля внутри разметки панели
+  const onlineView = document.getElementById("panel-online-view");
+  const profileView = document.createElement("div");
+  profileView.id = "panel-profile-view";
+  profileView.style.display = "none";
+  onlineView.parentNode.insertBefore(profileView, onlineView.nextSibling);
+}
+
+function checkAuth() {
+  const currentUser = localStorage.getItem("currentUser");
+  if (currentUser) {
+    formView.style.display = "none";
+    welcomeView.style.display = "block";
+    displayName.textContent = currentUser;
+    database.ref("online_users").child(currentUser).set(true);
+    updateProfileDOM(); // Обновляем данные профиля
+  }
+}
+
+submitBtn.addEventListener("click", () => {
+  const name = regInput.value.trim();
+  if (name) {
+    localStorage.setItem("currentUser", name);
+    regInput.value = "";
+    checkAuth();
+  }
+});
+
+document.getElementById("friends-toggle").addEventListener("click", () => sidebar.classList.toggle("open"));
+
+// УПРАВЛЕНИЕ РЕЖИМАМИ БОКОВОЙ ПАНЕЛИ
+const btnPanelOnline = document.getElementById("btn-panel-online");
+const btnPanelScores = document.getElementById("btn-panel-scores");
+const btnPanelProfile = document.getElementById("btn-panel-profile");
+const panelOnlineView = document.getElementById("panel-online-view");
+const panelScoresView = document.getElementById("panel-scores-view");
+const panelProfileView = document.getElementById("panel-profile-view");
+
+function clearSidebarStates() {
+  btnPanelOnline.classList.remove("active");
+  btnPanelScores.classList.remove("active");
+  if(btnPanelProfile) btnPanelProfile.classList.remove("active");
+  panelOnlineView.style.display = "none";
+  panelScoresView.style.display = "none";
+  if(panelProfileView) panelProfileView.style.display = "none";
+}
+
+btnPanelOnline.onclick = () => {
+  clearSidebarStates();
+  sidebarMode = "online";
+  btnPanelOnline.classList.add("active");
+  panelOnlineView.style.display = "block";
+};
+
+btnPanelScores.onclick = () => {
+  clearSidebarStates();
+  sidebarMode = "scores";
+  btnPanelScores.classList.add("active");
+  panelScoresView.style.display = "block";
+  loadLeaderboard();
+};
+
+if(btnPanelProfile) {
+  btnPanelProfile.onclick = () => {
+    clearSidebarStates();
+    sidebarMode = "profile";
+    btnPanelProfile.classList.add("active");
+    panelProfileView.style.display = "block";
+    updateProfileDOM();
+  };
+}
+
+// ФУНКЦИЯ СБОРКИ КИБЕР-ПАСПОРТА (ОБНОВЛЕНИЕ №6)
+function updateProfileDOM() {
+  if (!panelProfileView) return;
+  const currentUser = localStorage.getItem("currentUser");
+
+  if (!currentUser) {
+    panelProfileView.innerHTML = `
+      <h3>👤 Мой Профиль</h3>
+      <p style="font-size:12px; opacity:0.6; text-align:center; margin-top:20px;">Пожалуйста, авторизуйтесь в шапке сайта, чтобы создать Кибер-Паспорт.</p>
+    `;
+    return;
+  }
+
+  // Запрашиваем рекорды юзера из всех веток Firebase
+  Promise.all([
+    database.ref(`leaderboards/tap/${currentUser}`).once('value').then(s => s.val() || 0),
+    database.ref(`leaderboards/memory/${currentUser}`).once('value').then(s => s.val() || 0),
+    database.ref(`leaderboards/tetris/${currentUser}`).once('value').then(s => s.val() || 0)
+  ]).then(([pTap, pMem, pTet]) => {
+    const totalPower = pTap + (pMem * 5) + pTet; // Считаем общий ранг очков
+    let rank = "Новичок Сети 👾";
+    if (totalPower > 500) rank = "Кибер-Мастер 👑";
+    else if (totalPower > 150) rank = "Продвинутый Хакер ⚡";
+    else if (totalPower > 50) rank = "Кодер Кибер-Аграра 🌿";
+
+    panelProfileView.innerHTML = `
+      <h3>👤 Кибер-Паспорт</h3>
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--accent); border-radius: 8px; padding: 12px; box-shadow: 0 0 10px rgba(0,242,234,0.05);">
+        <p style="margin: 0 0 5px 0; font-size: 11px; text-transform: uppercase; color: var(--accent); font-weight: bold; letter-spacing:1px;">Пользователь:</p>
+        <h4 style="margin: 0 0 15px 0; font-size: 18px; color:#fff;">${currentUser}</h4>
+        
+        <p style="margin: 0 0 5px 0; font-size: 11px; text-transform: uppercase; color: var(--accent); font-weight: bold; letter-spacing:1px;">Ранг Системы:</p>
+        <div style="font-size: 13px; font-weight: bold; color: #fff; background: rgba(0,242,234,0.1); padding: 6px; border-radius: 4px; text-align: center; margin-bottom: 20px; border: 1px dashed var(--accent);">
+          ${rank}
+        </div>
+
+        <p style="margin: 0 0 10px 0; font-size: 11px; text-transform: uppercase; color: rgba(255,255,255,0.4); font-weight: bold; letter-spacing:1px;">Личные рекорды:</p>
+        <ul style="list-style: none; padding: 0; margin: 0; font-size: 13px; display:flex; flex-direction:column; gap:8px;">
+          <li style="display:flex; justify-content:space-between;"><span>🔘 Tap Counter:</span> <strong style="color:var(--accent);">${pTap}</strong></li>
+          <li style="display:flex; justify-content:space-between;"><span>🧠 Memory Grid:</span> <strong style="color:var(--accent);">${pMem}</strong></li>
+          <li style="display:flex; justify-content:space-between;"><span>🧱 Тетрис:</span> <strong style="color:var(--accent);">${pTet}</strong></li>
+        </ul>
+      </div>
+    `;
+  });
+}
+
+function saveRecord(gameKey, score) {
+  const currentUser = localStorage.getItem("currentUser");
+  if (!currentUser) return;
+  
+  database.ref(`leaderboards/${gameKey}/${currentUser}`).once('value').then((snapshot) => {
+    const oldScore = snapshot.val() || 0;
+    if (score > oldScore) {
+      database.ref(`leaderboards/${gameKey}/${currentUser}`).set(score, () => {
+        if(sidebarMode === "profile") updateProfileDOM(); // На лету обновляем паспорт
+      });
+    }
+  });
+}
+
+function loadLeaderboard() {
+  database.ref(`leaderboards/${leaderboardGame}`).orderByValue().limitToLast(10).on("value", (snapshot) => {
+    if (sidebarMode !== "scores") return;
+    
+    const scores = [];
+    snapshot.forEach((child) => {
+      scores.push({ name: child.key, score: child.val() });
+    });
+    scores.reverse();
+
+    if (scores.length === 0) {
+      leaderboardList.innerHTML = `<li>Никто ещё не играл</li>`;
+    } else {
+      leaderboardList.innerHTML = scores.map((s, index) => 
+        `<li>🏆 ${index + 1}. <strong>${s.name}</strong>: ${s.score}</li>`
+      ).join("");
+    }
+  });
+}
+
+document.querySelectorAll(".score-game-picker .game-card").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".score-game-picker .game-card").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    leaderboardGame = btn.dataset.scoreGame;
+    loadLeaderboard();
+  };
+});
+
+database.ref("online_users").on("value", (snapshot) => {
+  const data = snapshot.val();
+  const currentUser = localStorage.getItem("currentUser") || "";
+  
+  if (data) {
+    const globalUsers = Object.keys(data);
+    friendsList.innerHTML = globalUsers.map(u => {
+      if (u === currentUser) return `<li style="opacity: 0.6;">🟢 ${u} (Вы)</li>`;
+      return `<li class="online-user-item" data-name="${u}" style="cursor:pointer; padding:5px; border-radius:5px; transition: 0.2s;">🟢 <strong>${u}</strong> <span style="font-size:10px; opacity:0.7;">(Написать)</span></li>`;
+    }).join("");
+
+    document.querySelectorAll(".online-user-item").forEach(item => {
+      item.onclick = () => {
+        if (!currentUser) {
+          alert("Пожалуйста, сначала введите ваше имя в шапке сайта!");
+          return;
+        }
+        privateTarget = item.dataset.name;
+        chatMode = "private";
+        currentTab = "ai"; 
+        document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === "ai"));
+        sidebar.classList.remove("open");
+        render();
+      };
+    });
+  }
+});
+
+function applyFadeAnimation() {
+  content.style.opacity = 0;
+  content.style.transform = "scale(0.98)";
+  content.style.transition = "all 0.2s ease-in-out";
+  setTimeout(() => {
+    content.style.opacity = 1;
+    content.style.transform = "scale(1)";
+  }, 50);
+}
+
+function renderSocial(key) {
+  const s = SOCIAL[key];
+  content.innerHTML = `
+    <section class="social-screen">
+      <div class="social-icon" style="background:${s.color}15;color:${s.color}">${s.icon}</div>
+      <h2>${s.name}</h2>
+      <p>${s.desc}<br><br>Нажми кнопку — откроется официальный сайт ${s.name}.</p>
+      <a class="btn" style="background:${s.color}" href="${s.url}" target="_blank" rel="noopener">Открыть ${s.name}</a>
+    </section>
+  `;
+}
+
+// КИНОТЕАТР
+function renderVideoScreen() {
+  content.innerHTML = `
+    <section class="video-screen">
+      <h2>🎬 Наш Кинотеатр</h2>
+      <p class="hint">Смотри любимых блогеров прямо внутри SocialHub!</p>
+      <div class="video-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-top: 20px;">
+        ${VIDEO_DATABASE.map((video, index) => `
+          <div class="game-card video-card" data-index="${index}" style="cursor: pointer; padding: 10px; border: 1px solid var(--accent); border-radius: 8px; text-align: left; background: rgba(0,0,0,0.2);">
+            <div class="video-preview-wrap" style="position: relative; width: 100%; height: 140px; background: #000; border-radius: 6px; overflow: hidden; margin-bottom: 10px;">
+              <img src="${video.preview}" alt="Превью" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.8;">
+              <span style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 30px; color: var(--accent); text-shadow: 0 0 10px var(--accent);">▶</span>
+            </div>
+            <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); font-weight: bold;">${video.blogger}</span>
+            <h4 style="margin: 5px 0 0 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${video.title}</h4>
+          </div>
+        `).join("")}
+      </div>
+      <div id="player-zone" style="margin-top: 25px; display: none; text-align: center;">
+        <h3 id="player-title" style="margin-bottom: 10px;">Смотрим...</h3>
+        <div class="video-wrapper" style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; background: #000; border: 2px solid var(--accent); box-shadow: 0 0 15px var(--accent); border-radius: 10px;">
+          <iframe id="youtube-iframe" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" src="" frameborder="0" allowfullscreen></iframe>
+        </div>
+      </div>
+    </section>
+  `;
+
+  content.querySelectorAll(".video-card").forEach(card => {
+    card.onclick = () => {
+      const idx = card.dataset.index;
+      const video = VIDEO_DATABASE[idx];
+      const playerZone = document.getElementById("player-zone");
+      const iframe = document.getElementById("youtube-iframe");
+      const pTitle = document.getElementById("player-title");
+
+      iframe.src = `https://www.youtube.com/embed/${video.id}?autoplay=1`;
+      pTitle.textContent = `🍿 Смотрим: ${video.blogger} — ${video.title}`;
+      playerZone.style.display = "block";
+      playerZone.scrollIntoView({ behavior: 'smooth' });
+    };
+  });
+}
+
+// ИГРЫ
+function renderTapGame() {
+  const panel = content.querySelector("#game-panel");
+  panel.innerHTML = `
+    <h3>Tap Counter</h3>
+    <p class="score">Счёт: <span id="score">${tapScore}</span></p>
+    <button class="tap-btn" id="tap-btn">TAP</button>
+  `;
+  panel.querySelector("#tap-btn").onclick = () => { 
+    tapScore++; 
+    panel.querySelector("#score").textContent = tapScore; 
+    saveRecord("tap", tapScore); 
+  };
+}
+
+function renderMemoryGame() {
+  const panel = content.querySelector("#game-panel");
+  const cells = Array.from({ length: 9 }, (_, i) =>
+    `<button class="memory-cell ${i === memoryHighlight ? "highlight" : ""}" data-i="${i}"></button>`
+  ).join("");
+  panel.innerHTML = `
+    <h3>Memory Grid</h3>
+    <p class="score">Текущий Счёт: <span id="mem-score" style="color:var(--accent); font-weight:bold;">${memoryScore}</span></p>
+    <p class="hint">Найди яркую клетку. Промах — сброс счёта!</p>
+    <div class="memory-grid">${cells}</div>
+  `;
+  panel.querySelectorAll(".memory-cell").forEach((cell) => {
+    cell.onclick = () => {
+      if (Number(cell.dataset.i) === memoryHighlight) {
+        memoryScore++; 
+        saveRecord("memory", memoryScore); 
+        memoryHighlight = Math.floor(Math.random() * 9);
+        renderMemoryGame();
+      } else {
+        alert(`💥 Мимо! Ваш счёт обнулён. Максимальный рекорд сохранён.`);
+        memoryScore = 0; 
+        renderMemoryGame();
+      }
+    };
+  });
+}
+
+function renderGuessGame() {
+  const panel = content.querySelector("#game-panel");
+  panel.innerHTML = `
+    <h3>Угадай число</h3>
+    <p class="hint" id="guess-hint" style="margin-bottom: 12px;">Введите число от 1 до 100</p>
+    <input type="number" id="guess-val" class="guess-input" min="1" max="100">
+    <button class="btn" id="guess-btn" style="background:var(--accent); padding: 10px 20px;">Проверить</button>
+  `;
+  panel.querySelector("#guess-btn").onclick = () => {
+    const val = parseInt(document.getElementById("guess-val").value);
+    const hint = document.getElementById("guess-hint");
+    if (!val) return;
+    if (val === secretNum) {
+      hint.textContent = "🎉 Угадано! Загадано новое число.";
+      secretNum = Math.floor(Math.random() * 100) + 1;
+    } else {
+      hint.textContent = val > secretNum ? "📉 Слишком много! Бери меньше." : "📈 Слишком мало! Бери больше.";
+    }
+    document.getElementById("guess-val").value = "";
+  };
+}
+
+// ТЕТРИС
+function drawTetris() {
+  for (let r = 0; r < T_ROWS; r++) {
+    for (let c = 0; c < T_COLS; c++) {
+      const cell = document.getElementById(`tc-${r}-${c}`);
+      if (cell) cell.className = 't-cell' + (tBoard[r][c] ? ' t-filled' : '');
+    }
+  }
+  if (curPiece) {
+    for (let r = 0; r < curPiece.length; r++) {
+      for (let c = 0; c < curPiece[r].length; c++) {
+        if (curPiece[r][c] && curY + r >= 0) {
+          const cell = document.getElementById(`tc-${curY + r}-${curX + c}`);
+          if (cell) cell.className = 't-cell t-filled';
+        }
+      }
+    }
+  }
+}
+
+function collision(px, py, piece) {
+  for (let r = 0; r < piece.length; r++) {
+    for (let c = 0; c < piece[r].length; c++) {
+      if (piece[r][c]) {
+        let nx = px + c, ny = py + r;
+        if (nx < 0 || nx >= T_COLS || ny >= T_ROWS) return true;
+        if (ny >= 0 && tBoard[ny][nx]) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function mergePiece() {
+  for (let r = 0; r < curPiece.length; r++) {
+    for (let c = 0; c < curPiece[r].length; c++) {
+      if (curPiece[r][c] && curY + r >= 0) tBoard[curY + r][curX + c] = 1;
+    }
+  }
+  for (let r = T_ROWS - 1; r >= 0; r--) {
+    if (tBoard[r].every(v => v === 1)) {
+      tBoard.splice(r, 1);
+      tBoard.unshift(Array(T_COLS).fill(0));
+      tetrisScore += 10; 
+      document.getElementById("tetris-score-val").textContent = tetrisScore;
+      saveRecord("tetris", tetrisScore); 
+      r++;
+    }
+  }
+}
+
+function spawnPiece() {
+  curPiece = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+  curX = Math.floor((T_COLS - curPiece[0].length) / 2);
+  curY = -curPiece.length;
+  if (collision(curX, 0, curPiece)) {
+    tBoard = Array(T_ROWS).fill().map(() => Array(T_COLS).fill(0));
+    tetrisScore = 0; 
+    document.getElementById("tetris-score-val").textContent = tetrisScore;
+  }
+}
+
+window.controlTet = (action) => {
+  if (!curPiece) return;
+  if (action === 'L' && !collision(curX - 1, curY, curPiece)) curX--;
+  if (action === 'R' && !collision(curX + 1, curY, curPiece)) curX++;
+  if (action === 'D' && !collision(curX, curY + 1, curPiece)) curY++;
+  if (action === 'U') {
+    let rotated = curPiece[0].map((_, i) => curPiece.map(row => row[i]).reverse());
+    if (!collision(curX, curY, rotated)) curPiece = rotated;
+  }
+  drawTetris();
+};
+
+function runTetris() {
+  if (!curPiece) return;
+  if (collision(curX, curY + 1, curPiece)) {
+    mergePiece();
+    spawnPiece();
+  } else {
+    curY++;
+  }
+  drawTetris();
+}
+
+function startTetrisLoop() {
+  clearInterval(tetrisInterval);
+  const currentSpeed = isTurboSpeed ? 180 : 400; 
+  tetrisInterval = setInterval(runTetris, currentSpeed);
+}
+
+function renderTetrisGame() {
+  const panel = content.querySelector("#game-panel");
+  let gridHTML = "";
+  for (let r = 0; r < T_ROWS; r++) {
+    for (let c = 0; c < T_COLS; c++) {
+      gridHTML += `<div class="t-cell" id="tc-${r}-${c}"></div>`;
+    }
+  }
+  
+  panel.innerHTML = `
+    <h3>Тетрис</h3>
+    <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom:10px;">
+      <p style="margin:0;">Очки: <span id="tetris-score-val" style="color:var(--accent); font-weight:bold;">${tetrisScore}</span></p>
+      <div style="display:flex; gap:5px;">
+        <button class="game-card ${isTurboSpeed ? 'active' : ''}" id="btn-tetris-turbo" style="padding:4px 8px; font-size:11px;">⚡ Скорость 2x</button>
+        <button class="game-card" id="btn-tetris-clear" style="padding:4px 8px; font-size:11px; background:rgba(255,61,61,0.1); border-color:#ff3d3d; color:#ff3d3d;">🗑 Сбросить</button>
+      </div>
+    </div>
+    <div class="tetris-wrap">
+      <div class="tetris-grid">${gridHTML}</div>
+      <div class="tetris-controls">
+        <button class="btn-ctrl" onclick="controlTet('L')">◀</button>
+        <button class="btn-ctrl" onclick="controlTet('U')">🔄</button>
+        <button class="btn-ctrl" onclick="controlTet('D')">▼</button>
+        <button class="btn-ctrl" onclick="controlTet('R')">▶</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("btn-tetris-turbo").onclick = () => {
+    isTurboSpeed = !isTurboSpeed;
+    document.getElementById("btn-tetris-turbo").classList.toggle("active", isTurboSpeed);
+    startTetrisLoop();
+  };
+
+  document.getElementById("btn-tetris-clear").onclick = () => {
+    if(confirm("Очистить стакан и обнулить очки Тетриса?")) {
+      tBoard = Array(T_ROWS).fill().map(() => Array(T_COLS).fill(0));
+      tetrisScore = 0;
+      document.getElementById("tetris-score-val").textContent = tetrisScore;
+      saveRecord("tetris", 0);
+      spawnPiece();
+      drawTetris();
+    }
+  };
+
+  if (!curPiece) spawnPiece();
+  drawTetris();
+  startTetrisLoop(); 
+}
+
+function renderGames() {
+  clearInterval(tetrisInterval);
+  content.innerHTML = `
+    <section class="games-screen">
+      <h2>Игры</h2>
+      <div class="game-picker">
+        <button class="game-card ${currentGame === "tap" ? "active" : ""}" data-game="tap">Tap Counter</button>
+        <button class="game-card ${currentGame === "memory" ? "active" : ""}" data-game="memory">Memory Grid</button>
+        <button class="game-card ${currentGame === "guess" ? "active" : ""}" data-game="guess">Угадай число</button>
+        <button class="game-card ${currentGame === "tetris" ? "active" : ""}" data-game="tetris">Тетрис</button>
+      </div>
+      <div class="game-area" id="game-panel"></div>
+    </section>
+  `;
+
+  content.querySelectorAll(".game-card").forEach((card) => {
+    card.onclick = () => {
+      currentGame = card.dataset.game;
+      renderGames();
+    };
+  });
+
+  if (currentGame === "tap") renderTapGame();
+  else if (currentGame === "memory") renderMemoryGame();
+  else if (currentGame === "guess") renderGuessGame();
+  else if (currentGame === "tetris") renderTetrisGame();
+}
+
+// ЭКРАН ЧАТА И ПОМОЩНИКА
+function renderAIChat() {
+  let titleText = "Gemini 2.5 Flash Ассистент";
+  if (chatMode === "private") titleText = `🔒 Личный чат с: ${privateTarget}`;
+
+  content.innerHTML = `
+    <section class="ai-screen">
+      <h2>${titleText}</h2>
+      <div class="game-picker" style="margin-bottom:12px; gap: 5px; flex-wrap: wrap;">
+        <button class="game-card ${chatMode === "gemini" ? "active" : ""}" id="btn-mode-gemini">Gemini (ИИ)</button>
+        ${chatMode === "private" ? `<button class="game-card active" id="btn-back-global" style="background:#ff3d3d; color:white;">⬅ Назад к Gemini</button>` : ""}
+      </div>
+      <div class="ai-area">
+        <div class="chat-history" id="chat-history"></div>
+        <div class="chat-input-wrap">
+          <input type="text" id="chat-input" class="chat-input" placeholder="Введите сообщение...">
+          <button class="btn btn-send" id="btn-send-chat">></button>
+        </div>
+      </div>
+    </section>
+  `;
+
+  const input = document.getElementById("chat-input");
+  const sendBtn = document.getElementById("btn-send-chat");
+  const history = document.getElementById("chat-history");
+
+  document.getElementById("btn-mode-gemini").onclick = () => { chatMode = "gemini"; privateTarget = ""; renderAIChat(); };
+  if (chatMode === "private") {
+    document.getElementById("btn-back-global").onclick = () => { chatMode = "gemini"; privateTarget = ""; renderAIChat(); };
+  }
+
+  function addMessage(text, side, authorName = "") {
+    const m = document.createElement("div");
+    m.className = `msg ${side}`;
+    m.textContent = authorName ? `${authorName}: ${text}` : text;
+    history.appendChild(m);
+    history.scrollTop = history.scrollHeight;
+  }
+
+  database.ref("private_messages").off();
+  const currentUser = localStorage.getItem("currentUser") || "Гость";
+
+  if (chatMode === "private") {
+    const roomID = [currentUser, privateTarget].sort().join("-");
+    database.ref("private_messages").child(roomID).limitToLast(50).on("child_added", (snapshot) => {
+      const msgData = snapshot.val();
+      const side = msgData.name === currentUser ? "user" : "bot";
+      addMessage(msgData.text, side, msgData.name);
+    });
+  } else {
+    addMessage("Привет! На связи обновлённый Gemini 2.5 Flash. Я готов решать задачи, писать код или просто болтать!", "bot");
+  }
+
+  sendBtn.onclick = async () => {
+    const text = input.value.trim();
+    if (!text) return;
+
+    if (chatMode === "private") {
+      const roomID = [currentUser, privateTarget].sort().join("-");
+      database.ref("private_messages").child(roomID).push({
+        name: currentUser,
+        text: text,
+        timestamp: Date.now()
+      });
+      input.value = "";
+    } else {
+      addMessage(text, "user");
+      input.value = "";
+
+      const loadingMsg = document.createElement("div");
+      loadingMsg.className = "msg bot";
+      loadingMsg.textContent = "Gemini 2.5 думает...";
+      history.appendChild(loadingMsg);
+      history.scrollTop = history.scrollHeight;
+
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_token}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents: [{ parts: [{ text: text }] }] })
+        });
+
+        const data = await response.json();
+        history.removeChild(loadingMsg);
+
+        if (data.candidates && data.candidates[0].content.parts[0].text) {
+          addMessage(data.candidates[0].content.parts[0].text, "bot");
+        } else if (data.error) {
+          addMessage(`Ошибка Gemini API: ${data.error.message}`, "bot");
+        } else {
+          addMessage("Ошибка получения ответа от Google.", "bot");
+        }
+      } catch (e) {
+        if (history.contains(loadingMsg)) history.removeChild(loadingMsg);
+        addMessage("Не удалось подключиться к ИИ.", "bot");
+      }
+    }
+  };
+
+  input.onkeydown = (e) => { if (e.key === "Enter") sendBtn.click(); };
+}
+
+function render() {
+  applyFadeAnimation(); 
+  clearInterval(tetrisInterval);
+
+  if (currentTab === "games") {
+    renderGames();
+  } else if (currentTab === "ai") { 
+    renderAIChat(); 
+  } else if (currentTab === "videos") {
+    renderVideoScreen(); 
+  } else { 
+    renderSocial(currentTab); 
+  }
+}
+
+tabsContainer.addEventListener("click", (e) => {
+  const btn = e.target.closest(".tab");
+  if (!btn) return;
+  currentTab = btn.dataset.tab;
+  tabsContainer.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t === btn));
+  render();
+});
+
+checkAuth();
+render();
