@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SocialHub — Future Edition</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="friends-sidebar" id="friends-sidebar">
+    <button class="friends-toggle" id="friends-toggle">
+      <span class="toggle-icon">👥</span>
+      <span class="toggle-text">Панель</span>
+    </button>
+    <div class="friends-content">
+      <div class="panel-switcher" style="display: flex; gap: 5px; margin-bottom: 15px;">
+        <button id="btn-panel-online" class="game-card active" style="padding: 5px 10px; font-size: 12px; flex: 1;">В сети</button>
+        <button id="btn-panel-scores" class="game-card" style="padding: 5px 10px; font-size: 12px; flex: 1;">🏆 Топ</button>
+      </div>
+
+      <div id="panel-online-view">
+        <h3>В сети</h3>
+        <ul class="friends-list" id="friends-list"></ul>
+      </div>
+
+      <div id="panel-scores-view" style="display: none;">
+        <h3>🏆 Таблица лидеров</h3>
+        <div class="score-game-picker" style="display: flex; gap: 3px; margin-bottom: 10px; flex-wrap: wrap;">
+          <button class="game-card active" data-score-game="tap" style="padding: 3px 6px; font-size: 10px;">Tap</button>
+          <button class="game-card" data-score-game="memory" style="padding: 3px 6px; font-size: 10px;">Memory</button>
+          <button class="game-card" data-score-game="tetris" style="padding: 3px 6px; font-size: 10px;">Тетрис</button>
+        </div>
+        <ul class="friends-list" id="leaderboard-list">
+          <li style="opacity:0.6;">Выберите игру...</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="app">
+    <header class="header">
+      <div>
+        <h1 class="logo">SocialHub</h1>
+        <p class="tagline">Соцсети и игры в одном месте</p>
+      </div>
+      
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 10px;">
+        <div class="theme-picker" style="display: flex; gap: 5px; background: rgba(255,255,255,0.05); padding: 4px; border-radius: 6px; border: 1px solid rgba(0,242,234,0.1);">
+          <button class="game-card" id="theme-agrar" style="padding: 3px 8px; font-size: 11px;" title="Cyber-Agrar">🌿 Green</button>
+          <button class="game-card" id="theme-sunset" style="padding: 3px 8px; font-size: 11px;" title="Neon Sunset">🌆 Pink</button>
+          <button class="game-card" id="theme-matrix" style="padding: 3px 8px; font-size: 11px;" title="Matrix">📟 Matrix</button>
+        </div>
+
+        <div class="auth-box" id="auth-box">
+          <div id="auth-form-view">
+            <input type="text" id="reg-name" placeholder="Введите ваше имя" maxlength="20" />
+            <button class="btn btn-reg" id="btn-submit-name">Войти</button>
+          </div>
+          <div id="auth-welcome-view" style="display: none;">
+            <p class="welcome-text">Привет, <span id="user-display-name"></span>! 👋</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="content" id="content"></main>
+
+    <nav class="tabs-container" id="tabs-container" style="background: rgba(10, 10, 12, 0.9); border-top: 2px solid var(--accent); padding: 10px; display: flex; flex-direction: column; gap: 10px;">
+      <div class="menu-categories" style="display: flex; justify-content: space-around; gap: 10px; flex-wrap: wrap;">
+        
+        <div class="menu-group" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 5px; border-radius: 8px; display: flex; gap: 5px;">
+          <span style="font-size: 12px; color: var(--accent); display: block; text-align: center; font-weight: bold; padding: 5px 0 0 5px;">📱 СВЯЗЬ:</span>
+          <button class="tab active" data-tab="youtube">▶ YouTube</button>
+          <button class="tab" data-tab="instagram">📷 Ins</button>
+          <button class="tab" data-tab="tiktok">♪ TikTok</button>
+          <button class="tab" data-tab="pinterest">📌 Pin</button>
+          <button class="tab" data-tab="discord">💬 Discord</button>
+        </div>
+
+        <div class="menu-group" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 5px; border-radius: 8px; display: flex; gap: 5px; align-items: center;">
+          <span style="font-size: 12px; color: var(--accent); font-weight: bold; padding-left: 5px;">🎬 МЕДИА:</span>
+          <button class="tab" data-tab="videos">🎬 Ролики</button>
+        </div>
+
+        <div class="menu-group" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 5px; border-radius: 8px; display: flex; gap: 5px; align-items: center;">
+          <span style="font-size: 12px; color: var(--accent); font-weight: bold; padding-left: 5px;">🎮 ИГРЫ И ИИ:</span>
+          <button class="tab" data-tab="games">🎮 Games</button>
+          <button class="tab" data-tab="ai">🤖 Чат / AI</button>
+        </div>
+
+      </div>
+    </nav>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  
+  <script src="app.js"></script>
+</body>
+</html>
